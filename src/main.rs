@@ -12,6 +12,8 @@ fn main() {
         Some(file_path) => todo!()
     };
 
+    let volume = cli.volume;
+
     let default_cron = "0/20 * * * * *";
     let cron: Schedule = cli.cron
         .as_deref()
@@ -29,11 +31,10 @@ fn main() {
             println!("posture check in {:?}", duration);
             std::thread::sleep(duration);
             let value = audio_stream.clone();
-            std::thread::spawn(move || value.play_audio());
+            std::thread::spawn(move || value.play_audio(volume));
 
         }
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -85,21 +86,30 @@ impl AudioStream {
         }
     }
 
-    pub fn play_audio(&self){
+    pub fn play_audio(&self, volume: f32){
         let stream_handle = rodio::OutputStreamBuilder::open_default_stream().expect("Audio stream not found");
         let decoder = SamplesBuffer::new(2, 44100, self.audio.clone());
-        stream_handle.mixer().add(decoder);
-        std::thread::sleep(std::time::Duration::from_millis(1500));
+        let sink = rodio::Sink::connect_new(stream_handle.mixer());
+        sink.set_volume(volume);
+        sink.append(decoder);
+        sink.sleep_until_end();
+        //stream_handle.mixer().add(decoder);
     }
 }
 
+/// Simple program to play a sound on a cron expression
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Config {
     /// Which audio to play, currently not implemented
+    #[arg(short, long)]
     selected_audio: Option<String>,
 
-    /// Cron string for the effect
-    cron: Option<String>
+    #[arg(short, long)]
+    /// Cron string for the effect, in the form: " * * * * * * "
+    cron: Option<String>,
+
+    #[arg(short, long, default_value_t=1.0)]
+    volume: f32
 }
 
